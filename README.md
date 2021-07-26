@@ -1,18 +1,21 @@
-<p align="center">
-  <img src="https://github-contribution-stats.vercel.app/api/?username=bolinocroustibat" />
-</p>
+It seems the GitHub stats API widgets data is quite inconsistent:
+
+![My GitHub stats](https://github-readme-stats.vercel.app/api?username=bolinocroustibat&show_icons=true&theme=dracula)
+![My GitHub stats](https://github-contribution-stats.vercel.app/api/?username=bolinocroustibat&theme=dracula)
 
 <!--
-**bolinocroustibat/bolinocroustibat** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+- Python
+- REST APIs
+- Data Science / ML / DL / NLP
+- JavaScript
+- TypeScript
+- Nim language
+- PHP
+- Unity / C#
+- SQL
+- Linux/Debian
 
-Here are some ideas to get you started:
-
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
+<p align="center">
+  <img src="https://github-contribution-stats.vercel.app/api/?username=bolinocroustibat&theme=dracula" />
+</p>
 -->
