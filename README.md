@@ -1,4 +1,4 @@
-It seems the GitHub stats API widgets data is quite inconsistent:
+I wanted to use some GitHub stats API widgets but it is quite inconsistent:
 
 ![My GitHub stats](https://github-readme-stats.vercel.app/api?username=bolinocroustibat&show_icons=true&theme=dracula)
 ![My GitHub stats](https://github-contribution-stats.vercel.app/api/?username=bolinocroustibat&theme=dracula)
