@@ -1,5 +1,5 @@
 
-![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=bolinocroustibat&langs_count=10&layout=compact&hide=html,php)
+![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=bolinocroustibat&langs_count=12&layout=compact&hide=html,php)
 <!--
 - Python
 - REST APIs
