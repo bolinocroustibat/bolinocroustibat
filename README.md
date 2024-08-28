@@ -6,4 +6,6 @@
 [![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=anuraghazra)](https://github.com/anuraghazra/github-readme-stats)
 -->
 
-Find me on <a rel="me" href="https://mastodon.social/@bolino">Mastodon</a>
+<ul>
+<li>Also vaguely on <a rel="me" href="https://mastodon.social/@bolino">Mastodon</a></li>
+</ul>
