@@ -8,6 +8,6 @@
 
 Vaguely on:
 <ul>
-<li>[https://stackoverflow.com/users/4417586/bolino](StackOverflow)</li>
+<li><a href="https://stackoverflow.com/users/4417586/bolino">StackOverflow</a></li>
 <li><a rel="me" href="https://mastodon.social/@bolino">Mastodon</a></li>
 </ul>
