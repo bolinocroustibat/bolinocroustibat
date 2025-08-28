@@ -1,5 +1,4 @@
 ![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=bolinocroustibat&langs_count=12&layout=pie&hide=html,css,jinja,hack&theme=dracula)
-<a href="https://gitroll.io/profile/uVQnieN0KBheNpTffGZNLnTh7utj1" target="_blank"><img width=600 src="https://gitroll.io/api/badges/profiles/v1/uVQnieN0KBheNpTffGZNLnTh7utj1?theme=dark" alt="GitRoll Profile Badge"/></a>
 
 <!--
 ![My GitHub stats](https://github-readme-stats.vercel.app/api?username=bolinocroustibat&show_icons=true&theme=dracula)
