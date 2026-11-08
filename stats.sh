@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # stats.sh - Lines I added/deleted per language across local git repos,
-# printed as a tokei-like table.
+# printed as a tokei-like table, plus my main languages year by year.
 #
 # Usage: ./stats.sh [options] ROOT_DIR
 #   ROOT_DIR   folder containing the git repos to scan (or set STATS_ROOT);
@@ -9,14 +9,18 @@
 #   -m DEPTH   max depth when looking for repos (default: 4)
 #   -o FILE    raw data file (default: stats-raw.tsv next to this script)
 #   -w         also count web languages (HTML, CSS, SCSS, Sass, LESS)
-#   -R         re-render the table from the raw file, without scanning git again
-#   -M         render as a Markdown table instead of the terminal table
-#   -u FILE    write the Markdown table, export date and script link into FILE,
+#   -R         re-render from the raw file, without scanning git again
+#   -M         render as Markdown instead of the terminal table
+#   -y         show the languages-per-year table instead of the totals
+#   -u FILE    write both Markdown tables, export date and script link into FILE,
 #              between <!-- stats:start --> and <!-- stats:end --> (appended if absent)
 set -uo pipefail
 
 # Commit emails that identify me (edit here, add old work emails with "|")
 AUTHOR_REGEX='@adriencarpentier\.com|adrien\.carpentier@(mail\.)?numerique\.gouv\.fr|adrien[.]carpentier@wertkt[.]com|adrien@sparkmate[.]com?|[Bb]olino ?[Cc]roustibat'
+
+# Commits skipped by message (automated data backups committed under my name)
+SKIP_COMMITS='^Backup [0-9]{4}-[0-9]{2}-[0-9]{2}'
 
 # Repos ignored when rendering (regex on the repo path), e.g. -x 'old-job|tutorials'
 SKIP_REPOS=''
@@ -27,9 +31,10 @@ RAW="$SCRIPT_DIR/stats-raw.tsv"
 WEB=0
 RENDER_ONLY=0
 MARKDOWN=0
+YEARLY=0
 UPDATE_FILE=""
 
-while getopts "x:m:o:wRMu:" opt; do
+while getopts "x:m:o:wRMyu:" opt; do
   case "$opt" in
     x) SKIP_REPOS="$OPTARG" ;;
     m) MAX_DEPTH="$OPTARG" ;;
@@ -37,8 +42,9 @@ while getopts "x:m:o:wRMu:" opt; do
     w) WEB=1 ;;
     R) RENDER_ONLY=1 ;;
     M) MARKDOWN=1 ;;
+    y) YEARLY=1 ;;
     u) UPDATE_FILE="$OPTARG"; MARKDOWN=1 ;;
-    *) echo "Usage: $0 [-x regex] [-m depth] [-o file] [-w] [-R] [-M] [-u file] [root]" >&2; exit 2 ;;
+    *) echo "Usage: $0 [-x regex] [-m depth] [-o file] [-w] [-R] [-M] [-y] [-u file] [root]" >&2; exit 2 ;;
   esac
 done
 shift $((OPTIND - 1))
@@ -60,6 +66,7 @@ SKIP_PATHS+='|(^|/)lib/velocity-[^/]+/|(^|/)snap[.]svg[.]js$'
 SKIP_PATHS+='|[.]min[.](js|css)$'
 
 # ---------- Step 1: collect (slow, writes the raw TSV) ----------
+# Raw columns: repo, year ("all" = whole history), extension, files, added, deleted
 if [[ $RENDER_ONLY -eq 0 ]]; then
   : > "$RAW"
   cd "$ROOT" || exit 1   # repo paths are stored relative to ROOT (./group/repo)
@@ -70,22 +77,28 @@ if [[ $RENDER_ONLY -eq 0 ]]; then
     # No pathspec here: it forces git to diff every commit and is very slow.
     # --branches --remotes: every local and remote branch, each commit counted once
     git -C "$repo" log --branches --remotes --no-merges --no-renames -E --author="$AUTHOR_REGEX" \
-        --pretty=tformat: --numstat 2>/dev/null |
+        --invert-grep --grep="$SKIP_COMMITS" \
+        --pretty=tformat:'@%ad' --date=format:%Y --numstat 2>/dev/null |
     awk -F'\t' -v repo="$repo" -v skip="$SKIP_PATHS" '
-      $1 !~ /^[0-9]+$/ { next }          # binary files
+      /^@[0-9]+$/ { year = substr($0, 2); next }   # commit header: its year
+      $1 !~ /^[0-9]+$/ { next }          # binary files and blank lines
       $3 ~ skip { next }                 # vendored / generated / minified
       {
         m = split($3, segs, "/")
         n = split(segs[m], parts, ".")
         ext = (n > 1) ? tolower(parts[n]) : "(none)"
-        key = ext SUBSEP $3
-        if (!(key in seen)) { seen[key] = 1; files[ext]++ }
-        added[ext] += $1
-        deleted[ext] += $2
+        for (i = 1; i <= 2; i++) {
+          y = (i == 1) ? "all" : year
+          k = y SUBSEP ext
+          if (!((k, $3) in seen)) { seen[k, $3] = 1; files[k]++ }
+          added[k] += $1; deleted[k] += $2
+        }
       }
       END {
-        for (e in added)
-          printf "%s\t%s\t%d\t%d\t%d\n", repo, e, files[e], added[e], deleted[e]
+        for (k in added) {
+          split(k, p, SUBSEP)
+          printf "%s\t%s\t%s\t%d\t%d\t%d\n", repo, p[1], p[2], files[k], added[k], deleted[k]
+        }
       }' >> "$RAW" || true
   done
   echo "Raw data saved to $RAW" >&2
@@ -95,14 +108,19 @@ fi
 # Extension -> language (a "_" stands for a space in the name)
 LANG_MAP='py=Python ts=TypeScript tsx=TSX js=JavaScript mjs=JavaScript cjs=JavaScript jsx=JSX svelte=Svelte vue=Vue php=PHP java=Java kt=Kotlin swift=Swift dart=Dart go=Go rs=Rust rb=Ruby c=C/C++ h=C/C++ cpp=C/C++ cc=C/C++ hpp=C/C++ cs=C# sh=Shell bash=Shell zsh=Shell tf=HCL html=HTML css=CSS scss=SCSS sass=Sass less=LESS'
 WEB_LANGS='HTML CSS SCSS Sass LESS'
+TOP_PER_YEAR=3   # languages shown per year
 
 if [[ ! -s "$RAW" ]]; then
   echo "No data in $RAW (run without -R first)" >&2
   exit 1
 fi
+if awk -F'\t' 'NF != 6 { bad = 1; exit } END { exit !bad }' "$RAW"; then
+  echo "$RAW uses an old format: rescan without -R" >&2
+  exit 1
+fi
 
-# Per-language totals, sorted by lines added, plus a "__REPOS__<TAB>n" line
-DATA="$(awk -F'\t' -v map="$LANG_MAP" -v web="$WEB" -v weblangs="$WEB_LANGS" -v skip="$SKIP_REPOS" '
+# Shared awk code: language lookup and row filtering (sets l, or returns 0)
+AWK_LANG='
   BEGIN {
     n = split(map, pairs, " ")
     for (i = 1; i <= n; i++) {
@@ -113,12 +131,26 @@ DATA="$(awk -F'\t' -v map="$LANG_MAP" -v web="$WEB" -v weblangs="$WEB_LANGS" -v 
     split(weblangs, w, " ")
     for (i in w) isweb[w[i]] = 1
   }
-  skip != "" && $1 ~ skip { next }
-  !($2 in lang) { next }
-  {
-    l = lang[$2]
-    if (!web && (l in isweb)) next
-    files[l] += $3; added[l] += $4; deleted[l] += $5
+  function keep() {
+    if (skip != "" && $1 ~ skip) return 0
+    if (!($3 in lang)) return 0
+    l = lang[$3]
+    return web || !(l in isweb)
+  }'
+# 1234567 -> 1,234,567 (Markdown only)
+AWK_TH='
+  function th(n,   s, neg) {
+    neg = (n < 0); s = sprintf("%d", neg ? -n : n)
+    while (s ~ /[0-9][0-9][0-9][0-9]/) sub(/[0-9][0-9][0-9]($|,)/, ",&", s)
+    return (neg ? "-" : "") s
+  }
+  function line(c,   s) { s = sprintf("%70s", ""); gsub(/ /, c, s); return s }'
+AWK_VARS=(-F'\t' -v map="$LANG_MAP" -v web="$WEB" -v weblangs="$WEB_LANGS" -v skip="$SKIP_REPOS")
+
+# Per-language totals, sorted by lines added, plus a "__REPOS__<TAB>n" line
+DATA="$(awk "${AWK_VARS[@]}" "$AWK_LANG"'
+  $2 == "all" && keep() {
+    files[l] += $4; added[l] += $5; deleted[l] += $6
     if (!($1 in repos)) { repos[$1] = 1; nrepos++ }
   }
   END {
@@ -128,41 +160,69 @@ DATA="$(awk -F'\t' -v map="$LANG_MAP" -v web="$WEB" -v weblangs="$WEB_LANGS" -v 
   }' "$RAW")"
 NREPOS="$(printf '%s\n' "$DATA" | awk -F'\t' '$1 == "__REPOS__" { print $2 }')"
 
-TABLE="$(printf '%s\n' "$DATA" | grep -v '^__REPOS__' | sort -t$'\t' -k3,3nr |
-awk -F'\t' -v md="$MARKDOWN" '
-  function line(c,   s) { s = sprintf("%70s", ""); gsub(/ /, c, s); return s }
-  # 1234567 -> 1,234,567 (Markdown only)
-  function th(n,   s, neg) {
-    neg = (n < 0); s = sprintf("%d", neg ? -n : n)
-    while (s ~ /[0-9][0-9][0-9][0-9]/) sub(/[0-9][0-9][0-9]($|,)/, ",&", s)
-    return (neg ? "-" : "") s
-  }
-  function row(l, f, a, d, n) {
-    if (md) printf "| %s | %s | %s | %s | %s |\n", l, th(f), th(a), th(d), th(n)
-    else    printf " %-22s %8d %12d %12d %12d\n", l, f, a, d, n
-  }
-  BEGIN {
-    if (md) {
-      print "| Language | Files | Added | Deleted | Net |"
-      print "|----------|------:|------:|--------:|----:|"
-    } else {
-      print line("=")
-      printf " %-22s %8s %12s %12s %12s\n", "Language", "Files", "Added", "Deleted", "Net"
-      print line("=")
+totals_table() {
+  printf '%s\n' "$DATA" | grep -v '^__REPOS__' | sort -t$'\t' -k3,3nr |
+  awk -F'\t' -v md="$1" "$AWK_TH"'
+    function row(l, f, a, d, n) {
+      if (md) printf "| %s | %s | %s | %s | %s |\n", l, th(f), th(a), th(d), th(n)
+      else    printf " %-22s %8d %12d %12d %12d\n", l, f, a, d, n
     }
-  }
-  { row($1, $2, $3, $4, $5); f += $2; a += $3; d += $4 }
-  END {
-    if (md) row("**Total**", f, a, d, a - d)
-    else { print line("-"); row("Total", f, a, d, a - d); print line("=") }
-  }')"
+    BEGIN {
+      if (md) {
+        print "| Language | Files | Added | Deleted | Net |"
+        print "|----------|------:|------:|--------:|----:|"
+      } else {
+        print line("=")
+        printf " %-22s %8s %12s %12s %12s\n", "Language", "Files", "Added", "Deleted", "Net"
+        print line("=")
+      }
+    }
+    { row($1, $2, $3, $4, $5); f += $2; a += $3; d += $4 }
+    END {
+      if (md) row("**Total**", f, a, d, a - d)
+      else { print line("-"); row("Total", f, a, d, a - d); print line("=") }
+    }'
+}
+
+# One row per year: lines added and the top languages with their share
+yearly_table() {
+  awk "${AWK_VARS[@]}" "$AWK_LANG"'
+    $2 != "all" && keep() { added[$2, l] += $5 }
+    END { for (k in added) { split(k, p, SUBSEP); printf "%s\t%s\t%d\n", p[1], p[2], added[k] } }' "$RAW" |
+  sort -t$'\t' -k1,1nr -k3,3nr |
+  awk -F'\t' -v md="$1" -v top="$TOP_PER_YEAR" "$AWK_TH"'
+    function flush(   i, s, pct) {
+      if (year == "") return
+      s = ""
+      for (i = 1; i <= nl && i <= top; i++) {
+        pct = int(100 * la[i] / total + 0.5)
+        if (pct < 1) break
+        s = s (s == "" ? "" : " · ") ln[i] " " pct "%"
+      }
+      if (md) printf "| %s | %s | %s |\n", year, th(total), s
+      else    printf " %-6s %12d   %s\n", year, total, s
+    }
+    BEGIN {
+      if (md) {
+        print "| Year | Lines added | Main languages |"
+        print "|------|------------:|----------------|"
+      } else {
+        print line("=")
+        printf " %-6s %12s   %s\n", "Year", "Added", "Main languages"
+        print line("=")
+      }
+    }
+    $1 != year { flush(); year = $1; total = 0; nl = 0 }
+    { total += $3; nl++; ln[nl] = $2; la[nl] = $3 }
+    END { flush(); if (!md) print line("=") }'
+}
 
 if [[ -z "$UPDATE_FILE" ]]; then
-  printf '%s\n' "$TABLE"
+  if [[ $YEARLY -eq 1 ]]; then yearly_table "$MARKDOWN"; else totals_table "$MARKDOWN"; fi
   exit 0
 fi
 
-# ---------- Optional: write the table into a Markdown file (e.g. README.md) ----------
+# ---------- Optional: write the tables into a Markdown file (e.g. README.md) ----------
 EXPORT_DATE="$(date -r "$RAW" +%Y-%m-%d)"   # date of the last scan
 BLOCK="$(mktemp)"; OUT="$(mktemp)"
 trap 'rm -f "$BLOCK" "$OUT"' EXIT
@@ -170,7 +230,11 @@ trap 'rm -f "$BLOCK" "$OUT"' EXIT
   echo '<!-- stats:start -->'
   echo "Lines of code I wrote across $(( NREPOS / 10 * 10 ))+ repositories. Last export: $EXPORT_DATE, with [stats.sh](./stats.sh)."
   echo
-  printf '%s\n' "$TABLE"
+  totals_table 1
+  echo
+  echo "**By year**"
+  echo
+  yearly_table 1
   echo '<!-- stats:end -->'
 } > "$BLOCK"
 
